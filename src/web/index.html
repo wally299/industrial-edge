@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Industrial-Edge · 工业互联网边缘采集可视化平台</title>
+<script src="./static/echarts.min.js"></script>
+<script>
+  // 本地 echarts 缺失时回退 CDN
+  if (typeof echarts === "undefined") {
+    document.write('<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"><\/script>');
+  }
+</script>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3;
+    --muted: #8b949e; --accent: #2f81f7; --ok: #3fb950; --warn: #d29922; --crit: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; }
+  header { padding: 14px 22px; border-bottom: 1px solid var(--border);
+           display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .tag { font-size: 12px; color: var(--muted); }
+  #status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--crit); }
+  .layout { display: grid; grid-template-columns: 1fr 320px; gap: 16px; padding: 16px; }
+  .devices { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .card h2 { margin: 0 0 10px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; }
+  .b-run { background: rgba(63,185,80,.15); color: var(--ok); }
+  .b-stop { background: rgba(139,148,158,.15); color: var(--muted); }
+  .b-fault { background: rgba(248,81,73,.15); color: var(--crit); }
+  .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .metric { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+  .metric .lab { font-size: 12px; color: var(--muted); }
+  .metric .val { font-size: 18px; font-weight: 600; }
+  .metric .chart { height: 56px; }
+  .side { display: flex; flex-direction: column; gap: 16px; }
+  .alarms { max-height: 70vh; overflow: auto; }
+  .alarm { font-size: 13px; padding: 8px; border-left: 3px solid var(--warn); margin-bottom: 8px;
+           background: #0d1117; border-radius: 4px; }
+  .alarm.critical { border-left-color: var(--crit); }
+  .alarm .t { color: var(--muted); font-size: 11px; }
+  footer { padding: 10px 22px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border); }
+  code { background: #0d1117; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <div id="status-dot"></div>
+  <h1>Industrial-Edge</h1>
+  <span class="tag">工业互联网边缘数据采集与可视化平台 · Modbus TCP → MQTT → 时序库 → 实时大屏</span>
+</header>
+
+<div class="layout">
+  <div class="devices" id="devices"></div>
+  <div class="side">
+    <div class="card">
+      <h2>实时告警</h2>
+      <div class="alarms" id="alarms"><div style="color:var(--muted);font-size:13px">暂无告警</div></div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  架构借鉴开源项目 <code>iot-dc3</code>（pnoker）四层设计；协议驱动基于 <code>pymodbus</code>，消息总线基于 Eclipse <code>Paho MQTT</code>。
+  演示数据由 Modbus 设备模拟器产生，无需真实硬件即可运行。
+</footer>
+
+<script>
+const buffers = {};       // `${dev}/${point}` -> [[ts,val],...]
+const charts = {};        // `${dev}/${point}` -> echarts instance
+const MAX = 60;
+
+function statusBadge(v) {
+  if (v === 2) return '<span class="badge b-fault">故障</span>';
+  if (v === 1) return '<span class="badge b-run">运行</span>';
+  return '<span class="badge b-stop">停机</span>';
+}
+
+function buildUI(snapshot) {
+  const wrap = document.getElementById('devices');
+  wrap.innerHTML = '';
+  for (const d of snapshot.config) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.id = 'card-' + d.id;
+    let metricsHtml = '';
+    for (const p of d.points) {
+      if (p.kind === 'enum') {
+        metricsHtml += `<div class="metric"><div class="lab">${p.label}</div>
+          <div class="val" id="val-${d.id}-${p.name}">-</div></div>`;
+      } else {
+        metricsHtml += `<div class="metric"><div class="lab">${p.label}</div>
+          <div class="val" id="val-${d.id}-${p.name}">-</div>
+          <div class="chart" id="chart-${d.id}-${p.name}"></div></div>`;
+      }
+    }
+    card.innerHTML = `<h2>${d.name} <span id="status-${d.id}">-</span></h2>
+                      <div class="metrics">${metricsHtml}</div>`;
+    wrap.appendChild(card);
+    // 初始化图表
+    for (const p of d.points) {
+      if (p.kind === 'enum') continue;
+      const dom = document.getElementById(`chart-${d.id}-${p.name}`);
+      const c = echarts.init(dom, null, { renderer: 'canvas' });
+      charts[`${d.id}/${p.name}`] = c;
+      buffers[`${d.id}/${p.name}`] = [];
+      c.setOption({
+        grid: { left: 2, right: 2, top: 4, bottom: 2 },
+        xAxis: { type: 'time', show: false },
+        yAxis: { type: 'value', show: false, scale: true },
+        series: [{ type: 'line', showSymbol: false, smooth: true,
+                   lineStyle: { width: 1.5, color: '#2f81f7' },
+                   areaStyle: { color: 'rgba(47,129,247,.15)' }, data: [] }]
+      });
+    }
+    // 填充快照最新值
+    const latest = snapshot.latest[d.id] || {};
+    for (const p of d.points) {
+      const lv = latest[p.name];
+      if (!lv) continue;
+      if (p.kind === 'enum') {
+        document.getElementById(`status-${d.id}`).innerHTML = statusBadge(lv.value);
+        document.getElementById(`val-${d.id}-${p.name}`).innerHTML = statusBadge(lv.value);
+      } else {
+        document.getElementById(`val-${d.id}-${p.name}`).textContent =
+          lv.value + (p.unit || '');
+      }
+    }
+  }
+}
+
+function updateMetric(dev, p) {
+  if (p.kind === 'enum') {
+    document.getElementById(`status-${dev}`).innerHTML = statusBadge(p.value);
+    const el = document.getElementById(`val-${dev}-${p.name}`);
+    if (el) el.innerHTML = statusBadge(p.value);
+    return;
+  }
+  const key = `${dev}/${p.name}`;
+  const el = document.getElementById(`val-${dev}-${p.name}`);
+  if (el) el.textContent = p.value + (p.unit || '');
+  const buf = buffers[key];
+  if (!buf) return;
+  buf.push([Date.now(), p.value]);
+  if (buf.length > MAX) buf.shift();
+  const c = charts[key];
+  if (c) c.setOption({ series: [{ data: buf.slice() }] });
+}
+
+function pushAlarms(alarms) {
+  const box = document.getElementById('alarms');
+  if (box.firstChild && box.firstChild.textContent === '暂无告警') box.innerHTML = '';
+  for (const a of alarms) {
+    const div = document.createElement('div');
+    div.className = 'alarm' + (a.level === 'critical' ? ' critical' : '');
+    const time = new Date(a.ts).toLocaleTimeString();
+    div.innerHTML = `<div>${a.msg}</div><div class="t">${time}</div>`;
+    box.prepend(div);
+  }
+  while (box.children.length > 30) box.removeChild(box.lastChild);
+}
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws`);
+  ws.onopen = () => { document.getElementById('status-dot').style.background = 'var(--ok)'; };
+  ws.onclose = () => {
+    document.getElementById('status-dot').style.background = 'var(--crit)';
+    setTimeout(connect, 2000);
+  };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'snapshot') buildUI(msg);
+    else if (msg.type === 'metrics') for (const p of msg.points) updateMetric(msg.device, p);
+    else if (msg.type === 'alarm') pushAlarms(msg.alarms);
+  };
+}
+connect();
+window.addEventListener('resize', () => { for (const k in charts) charts[k].resize(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+version: "3.8"
+# 生产级部署：消息总线切换到真实 MQTT Broker（EMQX），驱动层与可视化层解耦
+services:
+  emqx:
+    image: emqx/emqx:5.8-alpine
+    ports:
+      - "1883:1883"      # MQTT
+      - "18083:18083"    # 管理控制台
+    environment:
+      - EMQX_LISTENERS__TCP__DEFAULT__PORT=1883
+
+  app:
+    build: .
+    environment:
+      - TRANSPORT=mqtt
+      - MQTT_HOST=emqx
+      - MQTT_PORT=1883
+    depends_on:
+      - emqx
+    ports:
+      - "8000:8000"

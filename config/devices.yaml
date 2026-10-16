@@ -1,0 +1,46 @@
+# Industrial-Edge 设备接入配置
+# 借鉴 iot-dc3 的「驱动层」思想：每台设备通过 slave(单元地址) 区分，
+# 驱动按 poll_interval 轮询 holding register，并按 scale 还原工程量。
+
+modbus:
+  host: 127.0.0.1      # 驱动连接地址（模拟器监听 0.0.0.0）
+  port: 5020          # 为避免与系统 502 冲突，使用 5020
+  register_count: 8   # 每台设备占用的保持寄存器数量
+
+# 可选：接入真实 MQTT Broker（EMQX/Mosquitto）做消息总线
+# 本地直连演示时留空，run.py 默认使用进程内总线（无需 Broker 即可运行）
+mqtt:
+  host: 127.0.0.1
+  port: 1883
+  topic_root: "devices/#"
+
+devices:
+  - id: dev-01
+    name: 注塑机 A
+    slave: 1
+    poll_interval: 2
+    points:
+      - {name: temperature, label: 温度, reg: 0, scale: 0.1, unit: "°C", min: 40, max: 95}
+      - {name: pressure,    label: 压力, reg: 1, scale: 0.1, unit: "MPa", min: 4, max: 12}
+      - {name: vibration,   label: 振动, reg: 2, scale: 0.01, unit: "mm/s", min: 0.5, max: 6}
+      - {name: status,      label: 状态, reg: 5, scale: 1, unit: "", kind: enum, map: {0: 停机, 1: 运行, 2: 故障}}
+
+  - id: dev-02
+    name: 空压机 B
+    slave: 2
+    poll_interval: 2
+    points:
+      - {name: temperature, label: 温度, reg: 0, scale: 0.1, unit: "°C", min: 30, max: 85}
+      - {name: pressure,    label: 气压, reg: 1, scale: 0.1, unit: "bar", min: 6, max: 9}
+      - {name: current,     label: 电流, reg: 3, scale: 0.1, unit: "A", min: 10, max: 60}
+      - {name: status,      label: 状态, reg: 5, scale: 1, unit: "", kind: enum, map: {0: 停机, 1: 运行, 2: 故障}}
+
+  - id: dev-03
+    name: 传送带电机 C
+    slave: 3
+    poll_interval: 3
+    points:
+      - {name: speed,       label: 转速, reg: 4, scale: 1, unit: "rpm", min: 1400, max: 1480}
+      - {name: vibration,   label: 振动, reg: 2, scale: 0.01, unit: "mm/s", min: 0.3, max: 4}
+      - {name: temperature, label: 温度, reg: 0, scale: 0.1, unit: "°C", min: 25, max: 70}
+      - {name: status,      label: 状态, reg: 5, scale: 1, unit: "", kind: enum, map: {0: 停机, 1: 运行, 2: 故障}}
