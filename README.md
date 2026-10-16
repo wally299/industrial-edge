@@ -1,6 +1,6 @@
 # Industrial-Edge · 工业互联网边缘数据采集与可视化平台
 
-> 面向**工业互联网 / 物联网**方向学生的毕业设计 / 简历项目。
+> 面向**工业互联网 / 物联网**方向的毕业设计与实践项目。
 > **融合两个开源平台的设计思想**：
 > - [iot-dc3](https://github.com/pnoker/iot-dc3) 的**四层分层架构**（驱动 / 传输 / 数据 / 应用）；
 > - [ThingsBoard](https://github.com/thingsboard/thingsboard) 的**领域模型**（Device / Asset、Telemetry / Attributes、Rule Chain、Dashboard，作者在校实训即使用 ThingsBoard）。
@@ -20,7 +20,7 @@
 - **数据层**：时序数据落地，支持历史查询。
 - **应用层**：REST API + WebSocket + ECharts 实时大屏，含阈值/故障告警。
 
-无需真实硬件即可一键运行演示，适合作为简历中的**项目经历**与**面试演示**。
+无需真实硬件即可一键运行演示，便于学习、教学演示与二次开发。
 
 ## 二、技术栈
 
@@ -78,7 +78,7 @@ industrial-edge/
 - **Eclipse Paho MQTT**：MQTT 消息总线客户端，EPL/EDL 许可。
 - **Apache ECharts**：实时可视化大屏，Apache-2.0 许可。
 
-## 六、简历项目经历（可直接使用）
+## 六、项目经历
 
 > **工业互联网边缘数据采集与可视化平台** ｜ 独立开发 ｜ 2026
 > - 融合开源工业互联网平台 **iot-dc3**（四层分层架构）与 **ThingsBoard**（Device/Telemetry/Rule Chain/Dashboard 领域模型，在校实训平台）的设计思想，设计并实现了「设备接入—消息总线—时序存储—可视化」采集平台。
@@ -87,7 +87,7 @@ industrial-edge/
 > - 支持 `docker-compose` 一键部署（含 EMQX），时序存储可平滑替换为 InfluxDB/TimescaleDB。
 > - **技术栈**：Python · pymodbus · MQTT · FastAPI · SQLite · ECharts · Docker
 
-## 七、可扩展方向（面试可讲）
+## 七、可扩展方向
 - 新增协议：仿照 `ModbusDriver` 实现 `xxx_driver.py`（如 OPC UA、S7），即可接入总线（iot-dc3 驱动扩展 + ThingsBoard Transport 扩展）。
 - 云边协同：驱动部署在边缘网关，MQTT 上云，对应 iot-dc3 边缘计算思想与 ThingsBoard 的 MQTT 设备主通道。
 - 规则引擎（已实现）：`src/app/rule_chain.py` 已实现 ThingsBoard 式节点化规则链（telemetry-filter → save-timeseries → latest-snapshot → threshold-eval → alarm-sink → push-client），新增节点即可编排。
