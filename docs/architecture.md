@@ -72,7 +72,7 @@ SQLite 时序表（生产可替换为 InfluxDB / TimescaleDB，即 iot-dc3 默�
 | [Eclipse Paho MQTT](https://github.com/eclipse-paho/paho.mqtt.python) | MQTT 消息总线客户端 | EPL/EDL |
 | [ECharts](https://github.com/apache/echarts) | 可视化大屏 | Apache-2.0 |
 
-## 五、可扩展点（面试可讲）
+## 五、可扩展点
 
 - **新增设备协议**：仿照 `ModbusDriver` 写一个 `xxx_driver.py`（如 OPC UA、S7），实现 `poll → publish` 即可接入总线（iot-dc3 的驱动扩展 + ThingsBoard 的 Transport 扩展）。
 - **横向扩展**：把 `transport` 切到 MQTT，驱动与可视化可分布部署；iot-dc3 用 RabbitMQ/Kafka 同理，ThingsBoard 也以 MQTT 为设备主通道。
